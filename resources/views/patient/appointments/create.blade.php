@@ -108,15 +108,26 @@
                     <!-- Step 3: Select Time Slot -->
                     <div class="mb-4">
                         <h5 class="border-bottom pb-2"><span class="badge bg-primary rounded-circle me-2">3</span>Select Time Slot</h5>
-                        <div id="timeSlotsContainer">
-                            <div class="alert alert-secondary">
-                                <i class="bi bi-info-circle me-1"></i>Please select a doctor and date first to see available time slots.
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="appointment_time" class="form-label">Appointment Time <span class="text-danger">*</span></label>
+                                <select class="form-select @error('appointment_time') is-invalid @enderror" 
+                                    id="appointment_time" name="appointment_time" required>
+                                    <option value="">-- Select Time Slot --</option>
+                                    <option value="09:00" {{ old('appointment_time') == '09:00' ? 'selected' : '' }}>09:00 AM - Morning</option>
+                                    <option value="10:00" {{ old('appointment_time') == '10:00' ? 'selected' : '' }}>10:00 AM - Morning</option>
+                                    <option value="11:00" {{ old('appointment_time') == '11:00' ? 'selected' : '' }}>11:00 AM - Late Morning</option>
+                                    <option value="14:00" {{ old('appointment_time') == '14:00' ? 'selected' : '' }}>02:00 PM - Afternoon</option>
+                                    <option value="15:00" {{ old('appointment_time') == '15:00' ? 'selected' : '' }}>03:00 PM - Afternoon</option>
+                                    <option value="16:00" {{ old('appointment_time') == '16:00' ? 'selected' : '' }}>04:00 PM - Late Afternoon</option>
+                                    <option value="17:00" {{ old('appointment_time') == '17:00' ? 'selected' : '' }}>05:00 PM - Evening</option>
+                                </select>
+                                @error('appointment_time')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                                <small class="text-muted">Select your preferred time slot</small>
                             </div>
                         </div>
-                        <input type="hidden" name="appointment_time" id="appointment_time" value="{{ old('appointment_time') }}">
-                        @error('appointment_time')
-                            <div class="text-danger small mt-1">{{ $message }}</div>
-                        @enderror
                     </div>
 
                     <!-- Step 4: Additional Information -->
@@ -212,13 +223,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const specializationSelect = document.getElementById('specialization');
     const doctorSelect = document.getElementById('doctor_id');
     const dateInput = document.getElementById('appointment_date');
-    const timeSlotsContainer = document.getElementById('timeSlotsContainer');
     const appointmentTimeInput = document.getElementById('appointment_time');
     const submitBtn = document.getElementById('submitBtn');
     const doctorInfo = document.getElementById('doctorInfo');
     const bookingSummary = document.getElementById('bookingSummary');
-    
-    let selectedTimeSlot = null;
 
     // Filter doctors by specialization
     specializationSelect.addEventListener('change', function() {
@@ -236,7 +244,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        loadTimeSlots();
+        checkFormCompletion();
     });
 
     // Show doctor info on selection
@@ -254,93 +262,37 @@ document.addEventListener('DOMContentLoaded', function() {
             doctorInfo.classList.add('d-none');
         }
         
-        loadTimeSlots();
+        checkFormCompletion();
     });
 
-    // Load time slots on date change
-    dateInput.addEventListener('change', loadTimeSlots);
+    // Check form completion on date change
+    dateInput.addEventListener('change', function() {
+        if (this.value) {
+            document.getElementById('summaryDate').textContent = formatDate(this.value);
+        }
+        checkFormCompletion();
+    });
 
-    function loadTimeSlots() {
+    // Check form completion on time change
+    appointmentTimeInput.addEventListener('change', function() {
+        if (this.value) {
+            document.getElementById('summaryTime').textContent = formatTime(this.value);
+        }
+        checkFormCompletion();
+    });
+
+    function checkFormCompletion() {
         const doctorId = doctorSelect.value;
         const date = dateInput.value;
+        const time = appointmentTimeInput.value;
         
-        selectedTimeSlot = null;
-        appointmentTimeInput.value = '';
-        submitBtn.disabled = true;
-        bookingSummary.style.display = 'none';
-        
-        if (!doctorId || !date) {
-            timeSlotsContainer.innerHTML = `
-                <div class="alert alert-secondary">
-                    <i class="bi bi-info-circle me-1"></i>Please select a doctor and date first to see available time slots.
-                </div>
-            `;
-            return;
+        if (doctorId && date && time) {
+            submitBtn.disabled = false;
+            bookingSummary.style.display = 'block';
+        } else {
+            submitBtn.disabled = true;
+            bookingSummary.style.display = 'none';
         }
-        
-        timeSlotsContainer.innerHTML = `
-            <div class="text-center py-3">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <p class="mt-2 text-muted">Loading available slots...</p>
-            </div>
-        `;
-        
-        fetch(`{{ route('patient.appointments.slots') }}?doctor_id=${doctorId}&date=${date}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.slots && data.slots.length > 0) {
-                    let slotsHtml = '<div class="row g-2">';
-                    data.slots.forEach(slot => {
-                        slotsHtml += `
-                            <div class="col-6 col-md-3">
-                                <button type="button" class="btn btn-outline-primary w-100 time-slot-btn" data-time="${slot}">
-                                    <i class="bi bi-clock me-1"></i>${formatTime(slot)}
-                                </button>
-                            </div>
-                        `;
-                    });
-                    slotsHtml += '</div>';
-                    timeSlotsContainer.innerHTML = slotsHtml;
-                    
-                    // Add click handlers
-                    document.querySelectorAll('.time-slot-btn').forEach(btn => {
-                        btn.addEventListener('click', function() {
-                            document.querySelectorAll('.time-slot-btn').forEach(b => {
-                                b.classList.remove('btn-primary');
-                                b.classList.add('btn-outline-primary');
-                            });
-                            this.classList.remove('btn-outline-primary');
-                            this.classList.add('btn-primary');
-                            
-                            selectedTimeSlot = this.dataset.time;
-                            appointmentTimeInput.value = selectedTimeSlot;
-                            submitBtn.disabled = false;
-                            
-                            document.getElementById('summaryTime').textContent = formatTime(selectedTimeSlot);
-                            document.getElementById('summaryDate').textContent = formatDate(dateInput.value);
-                            bookingSummary.style.display = 'block';
-                        });
-                    });
-                } else {
-                    timeSlotsContainer.innerHTML = `
-                        <div class="alert alert-warning">
-                            <i class="bi bi-exclamation-triangle me-1"></i>
-                            No available time slots for this date. The doctor may not be available or all slots are booked.
-                            Please try another date.
-                        </div>
-                    `;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                timeSlotsContainer.innerHTML = `
-                    <div class="alert alert-danger">
-                        <i class="bi bi-x-circle me-1"></i>Error loading time slots. Please try again.
-                    </div>
-                `;
-            });
     }
     
     function formatTime(time) {

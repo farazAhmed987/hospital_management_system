@@ -75,15 +75,37 @@ class AppointmentController extends Controller
      */
     public function getAvailableSlots(Request $request)
     {
-        $validated = $request->validate([
-            'doctor_id' => ['required', 'exists:doctors,id'],
-            'date' => ['required', 'date', 'after_or_equal:today'],
-        ]);
+        try {
+            $validated = $request->validate([
+                'doctor_id' => ['required', 'exists:doctors,id'],
+                'date' => ['required', 'date', 'after_or_equal:today'],
+            ]);
 
-        $doctor = Doctor::find($validated['doctor_id']);
-        $slots = $doctor->getAvailableSlots($validated['date']);
+            $doctor = Doctor::find($validated['doctor_id']);
+            
+            if (!$doctor) {
+                return response()->json(['slots' => [], 'message' => 'Doctor not found'], 404);
+            }
+            
+            if (!$doctor->is_available) {
+                return response()->json(['slots' => [], 'message' => 'Doctor is not available'], 200);
+            }
+            
+            $slots = $doctor->getAvailableSlots($validated['date']);
 
-        return response()->json(['slots' => $slots]);
+            return response()->json(['slots' => $slots, 'success' => true]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'slots' => [],
+                'errors' => $e->errors(),
+                'message' => 'Validation failed'
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'slots' => [],
+                'message' => 'An error occurred: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

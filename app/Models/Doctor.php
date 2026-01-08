@@ -101,49 +101,54 @@ class Doctor extends Model
      */
     public function getAvailableSlots(string $date): array
     {
-        $dayOfWeek = strtolower(date('l', strtotime($date)));
-        $schedules = $this->schedules()
-            ->where('day_of_week', $dayOfWeek)
-            ->where('is_active', true)
-            ->get();
+        try {
+            $dayOfWeek = strtolower(date('l', strtotime($date)));
+            $schedules = $this->schedules()
+                ->where('day_of_week', $dayOfWeek)
+                ->where('is_active', true)
+                ->get();
 
-        if ($schedules->isEmpty()) {
+            if ($schedules->isEmpty()) {
+                return [];
+            }
+
+            $slots = [];
+            
+            foreach ($schedules as $schedule) {
+                $startTime = strtotime($schedule->start_time);
+                $endTime = strtotime($schedule->end_time);
+                $slotDuration = $schedule->slot_duration * 60; // Convert to seconds
+
+                while ($startTime < $endTime) {
+                    $slotTime = date('H:i', $startTime);
+                    
+                    // Check if slot is already booked
+                    $isBooked = $this->appointments()
+                        ->where('appointment_date', $date)
+                        ->where('appointment_time', $slotTime)
+                        ->whereIn('status', ['pending', 'approved'])
+                        ->exists();
+
+                    // Also check with seconds format
+                    $isBookedWithSeconds = $this->appointments()
+                        ->where('appointment_date', $date)
+                        ->where('appointment_time', $slotTime . ':00')
+                        ->whereIn('status', ['pending', 'approved'])
+                        ->exists();
+
+                    if (!$isBooked && !$isBookedWithSeconds && !in_array($slotTime, $slots)) {
+                        $slots[] = $slotTime;
+                    }
+
+                    $startTime += $slotDuration;
+                }
+            }
+
+            sort($slots);
+            return $slots;
+        } catch (\Exception $e) {
+            \Log::error('Error getting available slots: ' . $e->getMessage());
             return [];
         }
-
-        $slots = [];
-        
-        foreach ($schedules as $schedule) {
-            $startTime = strtotime($schedule->start_time);
-            $endTime = strtotime($schedule->end_time);
-            $slotDuration = $schedule->slot_duration * 60; // Convert to seconds
-
-            while ($startTime < $endTime) {
-                $slotTime = date('H:i', $startTime);
-                
-                // Check if slot is already booked
-                $isBooked = $this->appointments()
-                    ->where('appointment_date', $date)
-                    ->where('appointment_time', $slotTime)
-                    ->whereIn('status', ['pending', 'approved'])
-                    ->exists();
-
-                // Also check with seconds format
-                $isBookedWithSeconds = $this->appointments()
-                    ->where('appointment_date', $date)
-                    ->where('appointment_time', $slotTime . ':00')
-                    ->whereIn('status', ['pending', 'approved'])
-                    ->exists();
-
-                if (!$isBooked && !$isBookedWithSeconds && !in_array($slotTime, $slots)) {
-                    $slots[] = $slotTime;
-                }
-
-                $startTime += $slotDuration;
-            }
-        }
-
-        sort($slots);
-        return $slots;
     }
 }
